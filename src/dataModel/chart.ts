@@ -1,15 +1,11 @@
-export type DateTime = string;
-
-export interface ChartDataItem {
-  date: DateTime;
-  value: number;
-}
-
-export interface ChartDataset {
-  type: 'line' | 'bar';
-  label: string;
-  data: ChartDataItem[];
+// Chart Data Model
+export interface ChartData {
+  id: string;
+  label: string[];
+  value: number[];
+  legend: string;
+  labelX: string;
+  labelY: string;
+  unit: string;
   color: string;
-  borderWidth: number;
-  showLine: boolean;
 }

@@ -1,35 +1,70 @@
 import { 
-  DatasetDetails, 
   Station,
-  Collection,
-  ChartDataItem,
-  ChartDataset,
-  FeatureItem,
-
+  StationMeta,
+  CollectionItem,
 } from '../../../dataModel';
-
 
 export interface StationMap {
   [key: string]: Station;
 }
 
-export function dataTransformCollection(collectionsData: any[]): Record<string, Collection> {
-  const collectionMap: Record<string, Collection> = {};
+// Transform station features into Station objects
+export function dataTransformationStation(stationData: any[]): Record<string, Station> {
+  const stationMap: Record<string, Station> = {};
 
+  if (!Array.isArray(stationData)) {
+    console.error("Invalid API response format: Expected an array");
+    return stationMap;
+  }
+
+  stationData.forEach((station: any) => {
+    const siteCode = station.properties.site_code;
+
+    if (!siteCode) {
+      console.warn("Missing site_code in feature:", station);
+      return;
+    }
+
+    if (!(siteCode in stationMap)) {
+      stationMap[siteCode] = {
+        id: siteCode,
+        geometry: {
+          type: station.geometry.type,
+          coordinates: [[station.geometry.coordinates]],
+        },
+        meta: {
+          ogc_fid: station.properties.ogc_fid,
+          site_code: siteCode,
+          site_country: station.properties.site_country,
+          site_elevation: station.properties.site_elevation || "",
+          site_elevation_unit: station.properties.site_elevation_unit || "",
+          site_name: station.properties.site_name,
+        },
+        collection_items: [], // Will be filled later
+      };
+    }
+  });
+
+  return stationMap;
+}
+
+// Transform collections into CollectionItem objects and attach to respective stations
+export function dataTransformCollection(collectionsData: any[], stations: Record<string, Station>, agency_filter: String): void {
   if (!Array.isArray(collectionsData)) {
     console.error("Invalid API response format: Expected an array");
-    return collectionMap;
+    return;
   }
 
   collectionsData.forEach((collection: any) => {
-    if (!collection.id || !collection.title) {
-      console.warn("Missing id or title in collection:", collection);
+    if (!collection.id) {
+      console.warn("Missing id in collection:", collection);
       return;
     }
 
     const parts = collection.id.split('.')[1].split('_');
-    if (parts.length === 8) {
+    if (parts.length === 9) {
       const [
+        prefix,
         agency,
         product,
         measurement_inst,
@@ -40,169 +75,23 @@ export function dataTransformCollection(collectionsData: any[]): Record<string, 
         time_period
       ] = parts;
 
-      if (agency === 'noaa') {
-        collectionMap[collection.id] = {
+      const siteCodeUpper = sitecode.toUpperCase();
+      const station = stations[siteCodeUpper];
+
+      if (station && agency === agency_filter) {
+        const collectionItem: CollectionItem = {
           id: collection.id,
-          title: collection.title,
-          agency: agency,
+          gas: gas,
+          gas_full_name: gas,
           product: product,
           measurement_inst: measurement_inst,
           methodology: methodology,
-          sitecode: sitecode,
-          country: country,
-          gas: gas,
           time_period: time_period,
-          links: collection.links?.map((link: any) => ({
-            href: link.href,
-            rel: link.rel,
-            type: link.type,
-          })) || [],
+          link: collection.links?.[1]
         };
-      }
-    };
-  });
 
-  return collectionMap;
-}
-
-export function dataTransformationStation(featuresData: any[]): Record<string, Station> {
-  const stationMap: Record<string, Station> = {};
-
-  if (!Array.isArray(featuresData)) {
-    console.error("Invalid API response format: Expected an array");
-    return stationMap;
-  }
-
-  featuresData.forEach((feature: any) => {
-    const siteCode = feature.properties.site_code;
-
-    if (!siteCode) {
-      console.warn("Missing site_code in feature:", feature);
-      return;
-    }
-
-    if (!(siteCode in stationMap)) {
-      stationMap[siteCode] = {
-        geometry: {
-          type: feature.geometry.type,
-          coordinates: feature.geometry.coordinates,
-        },
-        properties: {
-          ogc_fid: feature.properties.ogc_fid,
-          site_code: feature.properties.site_code,
-          site_country: feature.properties.site_country,
-          site_elevation: feature.properties.site_elevation || "",
-          site_elevation_unit: feature.properties.site_elevation_unit || "",
-          site_name: feature.properties.site_name,
-        },
-      };
-    }
-  });
-
-  return stationMap;
-}
-
-export function dataTransformationFeatureItems(featuresData: any[]): Record<string, FeatureItem> {
-  const featureMap: Record<string, FeatureItem> = {};
-
-  if (!Array.isArray(featuresData)) {
-    console.error("Invalid API response format: Expected an array");
-    return featureMap;
-  }
-
-  featuresData.forEach((feature: any) => {
-    const featureId = feature.id.toString();
-
-    if (!(featureId in featureMap)) {
-      const featureItem: FeatureItem = {
-        id: featureId,
-        type: feature.type,
-        geometry: {
-          type: feature.geometry.type,
-          coordinates: feature.geometry.coordinates,
-        },
-        properties: {
-          datetime: feature.properties.datetime,
-          ogc_fid: feature.properties.ogc_fid,
-          site_country: feature.properties.site_country,
-          site_elevation: feature.properties.site_elevation || "",
-          site_elevation_unit: feature.properties.site_elevation_unit || "",
-          site_name: feature.properties.site_name,
-          value: feature.properties.value || "",
-        },
-        links: feature.links?.map((link: any) => ({
-          title: link.title,
-          href: link.href,
-          rel: link.rel,
-          type: link.type,
-        })) || [],
-      };
-
-      featureMap[featureId] = featureItem;
-    }
-  });
-
-  return featureMap;
-}
-
-
-// Function to map the Collection data to Station datasets
-export function mapDatasetsToStations(collections: { [key: string]: Collection }, stations: { [key: string]: Station }): void {
-  for (const collectionKey in collections) {
-    const collection = collections[collectionKey];
-    
-    // Find corresponding station by sitecode
-    const station = stations[collection.sitecode.toUpperCase()];
-    if (station) {
-      // Check if the URL already exists in the station's datasets
-      const existingDataset = station.datasets?.find(dataset => dataset.url === collection.links[1].href);
-      
-      if (!existingDataset) {
-        const dataset: DatasetDetails = {
-          gas: collection.gas,
-          gas_full_name: collection.gas,
-          product: collection.product,
-          measurement_inst: collection.measurement_inst,
-          methodology: collection.methodology,
-          time_period: collection.time_period,
-          url: collection.links[1].href,
-        };
-        
-        // Ensure datasets array exists and then push the new dataset
-        station.datasets = station.datasets || [];
-        station.datasets.push(dataset);
+        station.collection_items?.push(collectionItem);
       }
     }
-  }
-}
-
-export async function getStationChartDataset(
-  url: string,
-  label: string,
-  color: string,
-  type: "line" | "bar" = "line"
-): Promise<ChartDataset> {
-  try {
-    const response = await fetch(url);
-    const data: ChartDataItem[] = await response.json();
-
-    return {
-      type,
-      label,
-      data,
-      color,
-      borderWidth: 2,
-      showLine: true,
-    };
-  } catch (error) {
-    console.error("Error fetching station data:", error);
-    return {
-      type,
-      label,
-      data: [],
-      color,
-      borderWidth: 1,
-      showLine: false,
-    };
-  }
+  });
 }
