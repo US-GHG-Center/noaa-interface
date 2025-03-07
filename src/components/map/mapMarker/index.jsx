@@ -39,15 +39,17 @@ export const MarkerFeature = ({ vizItems, onSelectVizItem }) => {
   useEffect(() => {
     if (!map) return;
 
-    const threshold = 8;
-    map.on('zoom', () => {
-      const currentZoom = map.getZoom();
-      if (currentZoom <= threshold) {
-        setMarkersVisible(true);
-      } else {
-        setMarkersVisible(false);
-      }
-    });
+    // todo: make this generic
+    
+    // const threshold = 8;
+    // map.on('zoom', () => {
+    //   const currentZoom = map.getZoom();
+    //   if (currentZoom <= threshold) {
+    //     setMarkersVisible(true);
+    //   } else {
+    //     setMarkersVisible(false);
+    //   }
+    // });
   }, [map]);
 
   return null;
