@@ -1,156 +1,97 @@
-import {
-  PlumeRegion,
-  Plume,
-  SubDailyPlume,
-  STACItem,
-  PlumeMeta,
-  PlumeRegionMeta,
+import { 
+  Station,
+  StationMeta,
+  CollectionItem,
 } from '../../../dataModel';
 
-interface PlumeRegionMap {
-  [key: string]: PlumeRegion;
+export interface StationMap {
+  [key: string]: Station;
 }
 
-interface PlumeMap {
-  [key: string]: Plume;
-}
+// Transform station features into Station objects
+export function dataTransformationStation(stationData: any[]): Record<string, Station> {
+  const stationMap: Record<string, Station> = {};
 
-type DataTree = PlumeRegionMap;
+  if (!Array.isArray(stationData)) {
+    console.error("Invalid API response format: Expected an array");
+    return stationMap;
+  }
 
-export function dataTransformationPlume(
-  data: STACItem[],
-  plumeMetaData: PlumeMetaMap
-): PlumeMap {
-  // format of FeatureCollection Id: <something>_<region>_<plumeid>_<datetime>
-  // goes_ch4_<country>_<administrativeDivision>_<plumeSourceId>_<plumeId>_<datetime>
-  const plumeMap: PlumeMap = {};
+  stationData.forEach((station: any) => {
+    const siteCode = station.properties.site_code;
 
-  // sort by data by time
-  const sortedData = data.sort((prev: STACItem, next: STACItem): number => {
-    const prev_date = new Date(prev.properties.datetime).getTime();
-    const next_date = new Date(next.properties.datetime).getTime();
-    return prev_date - next_date;
+    if (!siteCode) {
+      console.warn("Missing site_code in feature:", station);
+      return;
+    }
+
+    if (!(siteCode in stationMap)) {
+      stationMap[siteCode] = {
+        id: siteCode,
+        geometry: {
+          type: station.geometry.type,
+          coordinates: [[station.geometry.coordinates]],
+        },
+        meta: {
+          ogc_fid: station.properties.ogc_fid,
+          site_code: siteCode,
+          site_country: station.properties.site_country,
+          site_elevation: station.properties.site_elevation || "",
+          site_elevation_unit: station.properties.site_elevation_unit || "",
+          site_name: station.properties.site_name,
+        },
+        collection_items: [], // Will be filled later
+      };
+    }
   });
 
-  // create a plumemap
-  sortedData.forEach((item: STACItem) => {
-    const itemId = item.id;
-    const destructuredId = itemId.split('_');
-    // goes-ch4_<country>_<administrativeDivision>_<plumeSourceId>_<plumeId>_<datetime>
-    const [_, country, administrativeDivision, region, plumeId, __] =
-      destructuredId;
-    const newPlumeId: string = `${country}_${administrativeDivision}_${region}_${plumeId}`;
-    if (!(newPlumeId in plumeMap)) {
-      let [lon, lat] = item.geometry.coordinates[0][0];
-      if (newPlumeId in plumeMetaData) {
-        lon = plumeMetaData[newPlumeId].lon;
-        lat = plumeMetaData[newPlumeId].lat;
+  return stationMap;
+}
+
+// Transform collections into CollectionItem objects and attach to respective stations
+export function dataTransformCollection(collectionsData: any[], stations: Record<string, Station>, agency_filter: String): void {
+  if (!Array.isArray(collectionsData)) {
+    console.error("Invalid API response format: Expected an array");
+    return;
+  }
+
+  collectionsData.forEach((collection: any) => {
+    if (!collection.id) {
+      console.warn("Missing id in collection:", collection);
+      return;
+    }
+
+    const parts = collection.id.split('.')[1].split('_');
+    if (parts.length === 9) {
+      const [
+        prefix,
+        agency,
+        product,
+        measurement_inst,
+        methodology,
+        sitecode,
+        country,
+        gas,
+        time_period
+      ] = parts;
+
+      const siteCodeUpper = sitecode.toUpperCase();
+      const station = stations[siteCodeUpper];
+
+      if (station && agency === agency_filter) {
+        const collectionItem: CollectionItem = {
+          id: collection.id,
+          gas: gas,
+          gas_full_name: gas,
+          product: product,
+          measurement_inst: measurement_inst,
+          methodology: methodology,
+          time_period: time_period,
+          link: collection.links?.[1]
+        };
+
+        station.collection_items?.push(collectionItem);
       }
-      const plume: Plume = {
-        id: newPlumeId,
-        region: region,
-        representationalPlume: item,
-        location: [lon, lat],
-        startDate: item.properties.datetime,
-        endDate: item.properties.datetime,
-        subDailyPlumes: [],
-      };
-      plumeMap[newPlumeId] = plume;
-    }
-    plumeMap[newPlumeId].subDailyPlumes.push(item);
-  });
-
-  return plumeMap;
-}
-
-export function dataTransformationPlumeRegion(
-  plumeMap: PlumeMap
-): PlumeRegionMap {
-  const dataTree: DataTree = {};
-  // create a data tree
-  Object.keys(plumeMap).forEach((plumeId) => {
-    // datetime correction in the plume. Note: plumes are in sorted order (by datetime)
-    const noOfSubDailyPlumes: number = plumeMap[plumeId].subDailyPlumes.length;
-    const firstSubDailyPlume: SubDailyPlume =
-      plumeMap[plumeId].subDailyPlumes[0];
-    const lastSubDailyPlume: SubDailyPlume =
-      plumeMap[plumeId].subDailyPlumes[noOfSubDailyPlumes - 1];
-    plumeMap[plumeId].startDate = firstSubDailyPlume.properties.datetime;
-    plumeMap[plumeId].endDate = lastSubDailyPlume.properties.datetime;
-    // datetime correction end
-
-    const plume = plumeMap[plumeId];
-    const region = plume.region;
-
-    if (!(region in dataTree)) {
-      const plumeRegion: PlumeRegion = {
-        id: region,
-        location: plume.location,
-        startDate: plume.startDate,
-        endDate: plume.endDate,
-        plumes: [],
-      };
-      dataTree[region] = plumeRegion;
-    }
-    dataTree[region].plumes.push(plume);
-    dataTree[region].endDate = plume.endDate; // to get realistic endDate for the PlumeRegion.
-  });
-
-  return dataTree;
-}
-
-interface PlumeMetaMap {
-  [key: string]: PlumeMeta;
-}
-
-interface PlumeRegionMetaMap {
-  [key: string]: PlumeRegionMeta;
-}
-
-export function dataTransformationPlumeMeta(
-  plumeMetas: PlumeMeta[]
-): PlumeMetaMap {
-  // basically array to hashmap conversion.
-  const plumeMetaMap: PlumeMetaMap = {};
-  plumeMetas.forEach((plumeMeta: PlumeMeta) => {
-    if (!(plumeMeta.id in plumeMetaMap)) {
-      plumeMetaMap[plumeMeta.id] = plumeMeta;
     }
   });
-  return plumeMetaMap;
-}
-
-export function dataTransformationPlumeRegionMeta(
-  plumeMetaMap: PlumeMetaMap
-): PlumeRegionMetaMap {
-  const plumeRegionMetaMap: PlumeRegionMetaMap = {};
-
-  Object.keys(plumeMetaMap).forEach((plumeId) => {
-    let plumeMeta: PlumeMeta = plumeMetaMap[plumeId];
-    if (!(plumeMeta.plumeSourceId in plumeRegionMetaMap)) {
-      const plumeRegionMeta: PlumeRegionMeta = {
-        id: plumeMeta.plumeSourceId, // Format: <region>. e.g. BV1
-        plumeSourceName: plumeMeta.plumeSourceName,
-        country: plumeMeta.country,
-        administrativeDivision: plumeMeta.administrativeDivision,
-        plumes: [],
-      };
-      plumeRegionMetaMap[plumeMeta.plumeSourceId] = plumeRegionMeta;
-    }
-    plumeRegionMetaMap[plumeMeta.plumeSourceId].plumes.push(plumeMeta);
-  });
-  return plumeRegionMetaMap;
-}
-
-// using the dataset, update the metadata
-export function metaDatetimeFix(
-  plumeMetaMap: PlumeMetaMap,
-  plumeMap: PlumeMap
-) {
-  Object.keys(plumeMap).forEach((plumeId) => {
-    if (!(plumeId in plumeMetaMap)) return;
-    plumeMetaMap[plumeId].startDatetime = plumeMap[plumeId].startDate;
-    plumeMetaMap[plumeId].endDatetime = plumeMap[plumeId].endDate;
-  });
-  return plumeMetaMap;
 }
