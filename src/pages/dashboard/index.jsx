@@ -5,7 +5,12 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
 import { fetchAllFromFeaturesAPI } from '../../services/api';
 import { ChartData } from '../../dataModel/chart';
-import { getChartColorFromIndex } from '../../utils/helpers';
+import { 
+  getChartColor,
+  getChartLegend,
+  getYAxisLabel,
+  getDataAccessURL,
+} from '../../utils/helpers';
 
 import {
   MainMap,
@@ -62,8 +67,8 @@ export function Dashboard({
   const [loadingChartData, setLoadingChartData] = useState(false);
   const [showMarkerFeature, setShowMarkerFeature] = useState(true);
   const [chartData, setChartData] = useState([]);
+  const [dataAccessURL, setDataAccessURL] = useState('');
 
-  console.log(stationData);
   // handler functions
   const handleSelectedVizItem = (vizItemId) => {
     setSelectedStationId(vizItemId);
@@ -127,8 +132,10 @@ export function Dashboard({
                 id: item.id,
                 label: Array.isArray(item.datetime) ? item.datetime : [item.datetime],
                 value: Array.isArray(item.value) ? item.value : [item.value],
-                color: getChartColorFromIndex(index) || '#1976d2',
-                legend: item.id,
+                color: getChartColor(item) || '#1976d2',
+                legend: getChartLegend(item),
+                labelX: 'Observation Date/Time (UTC)',
+                labelY: getYAxisLabel(item),
                 displayLine: item.time_period === 'monthly' || item.time_period === 'yearly',
               });
             }
@@ -138,6 +145,9 @@ export function Dashboard({
         // Update station data and chart data
         setStationData(updatedStationData);
         setChartData(processedChartData);
+
+        // Set data access URL
+        setDataAccessURL(getDataAccessURL(stationData[selectedStationId]));
       } catch (error) {
         console.error('Error in fetchCollectionItemValue:', error);
         setDisplayChart(false);
@@ -181,7 +191,7 @@ export function Dashboard({
             
             </div>
         </Panel>
-        {true && (
+        {displayChart && (
           <>
             <PanelResizeHandle className='resize-handle'>
               <DragHandleIcon title='Resize' />
@@ -201,7 +211,7 @@ export function Dashboard({
                       <ChartInstruction />
                     </ChartToolsLeft>
                     <ChartToolsRight>
-                      <DataAccessTool dataAccessLink={'https://www.google.com'} />
+                      <DataAccessTool dataAccessLink={dataAccessURL} />
                       <ZoomResetTool />
                       <CloseButton handleClose={handleChartClose} />
                     </ChartToolsRight>
@@ -216,14 +226,14 @@ export function Dashboard({
                     </ChartTitle>
                     { loadingChartData && <LoadingSpinner />}
                     {chartData.length > 0 && chartData.map((data, index) => (
-                      index <= 1 && (
+                      (
                       <LineChart
                         key={data.id}
                         data={data.value}
                         labels={data.label}
                         legend={data.legend}
-                        labelX={'Observation Date/Time UTC'}
-                        labelY={'Carbon Dioxide (CO2) Concentration (ppm)'}
+                        labelX={data.labelX}
+                        labelY={data.labelY}
                         index={index}
                         showLine={data.displayLine}
                         color={data.color}
