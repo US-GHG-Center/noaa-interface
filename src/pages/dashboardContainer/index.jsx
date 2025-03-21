@@ -1,77 +1,67 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
-
+import React, { useEffect, useState } from 'react';
 import { Dashboard } from '../dashboard/index.jsx';
 import { fetchAllFromFeaturesAPI } from '../../services/api';
 import {
   dataTransformationStation,
   dataTransformCollection,
-  dataTransformationFeatureItems,
-  mapDatasetsToStations,
+  updateCollectionItemValues,
 } from './helper/dataTransform';
-import { getMockStationData } from '../../utils/datahelpers';
-import { transform } from 'typescript';
+import { useSearchParams } from 'react-router-dom';
+import { zoom } from 'chartjs-plugin-zoom';
 
-const REACT_APP_FEATURES_API_URL = process.env.REACT_APP_FEATURES_API_URL || '';
+const FEATURES_API_URL = process.env.REACT_APP_FEATURES_API_URL || '';
+const stationUrl = `${FEATURES_API_URL}/collections/public.station_metadata/items`;
+const collectionUrl = `${FEATURES_API_URL}/collections`;
 
 export function DashboardContainer() {
+  const [selectedStationId, setSelectedStationId] = useState("");
+  const [stations, setStations] = useState({});
+  const [loading, setLoading] = useState(true);
 
+  // get the query params
+  const [ searchParams ] = useSearchParams();
+  const [ agency ] = useState(searchParams.get('agency') || "noaa"); // nist, noaa, or nasa
+  const [ ghg, setSelectedGHG ] = useState(searchParams.get('ghg') || "co2"); // co2 or ch4
+  const [ stationCode ] = useState(searchParams.get('station-code') || ""); // buc, smt, etc
+  const [ zoomLevel, setZoomLevel ] = useState (searchParams.get('zoom-level')); // let default zoom level controlled by map component
+  const [zoomLocation, setZoomLocation] = useState(
+    searchParams.get('zoom-location') || []
+  ); // let default zoom location be controlled by map component
+  
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const stationUrl = 'https://dev.ghg.center/api/features/collections/public.station_metadata/items';
-        const collectionUrl = 'https://dev.ghg.center/api/features/collections';
+        // Fetch and transform station metadata
+        const stationApiResponse = await fetchAllFromFeaturesAPI(stationUrl);
+        const transformedStationData = dataTransformationStation(stationApiResponse);
+        setStations(transformedStationData);
 
-        let transformedStationData, transformedCollectionData;
-
-        // Fetch and process station data
-        const stationApiResponse = fetchAllFromFeaturesAPI(stationUrl);
-        stationApiResponse.then((data) => {
-          transformedStationData = dataTransformationStation(data);
-
-          // Fetch and process collection data after station data
-          const collectionApiResponse = fetchAllFromFeaturesAPI(collectionUrl);
-          collectionApiResponse.then((data) => {
-            transformedCollectionData = dataTransformCollection(data);
-
-            // Now map the datasets to stations once both data are ready
-            mapDatasetsToStations(transformedCollectionData, transformedStationData);
-            console.log('transformedStationData', transformedStationData);
-
-            // Feature Items
-            const featureItemsUrl = transformedStationData[`ABP`].datasets[0].url;
-            const featureItemsApiResponse = fetchAllFromFeaturesAPI(featureItemsUrl);
-            featureItemsApiResponse.then((data) => {
-              const transformedFeatureItems = dataTransformationFeatureItems(data);
-              console.log('transformedFeatureItems', transformedFeatureItems);
-            });
-          });
-        });
+        // Fetch and transform collection data
+        const collectionApiResponse = await fetchAllFromFeaturesAPI(collectionUrl);
+        dataTransformCollection(collectionApiResponse, transformedStationData, agency);
+        setStations(transformedStationData);
       } catch (error) {
         console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchData().catch(console.error);
-  }, []); // only on initial mount
-
-  // return (
-  //   <Dashboard
-  //     data={collectionItems}
-  //     zoomLocation={zoomLocation}
-  //     zoomLevel={zoomLevel}
-  //     setZoomLocation={setZoomLocation}
-  //     setZoomLevel={setZoomLevel}
-  //     collectionMeta={collectionMeta}
-  //     dataTree={dataTree}
-  //     metaDataTree={metaDataTree}
-  //     vizItemMetaData={vizItemMetaData}
-  //     collectionId={collectionId}
-  //     loadingData={loadingData}
-  //   />
-  // );
+    fetchData();
+  }, []);
 
   return (
-    <h3>NOAA Dataset</h3>
+    <Dashboard
+      stationData={stations}
+      setStationData={setStations}
+      selectedStationId={selectedStationId}
+      setSelectedStationId={setSelectedStationId}
+      ghg={ghg}
+      zoomLevel={zoomLevel}
+      setZoomLevel={setZoomLevel}
+      zoomLocation={zoomLocation}
+      setZoomLocation={setZoomLocation}
+      loadingData={loading}
+    />
   );
 }
