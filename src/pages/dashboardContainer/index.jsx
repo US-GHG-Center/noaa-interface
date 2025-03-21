@@ -9,9 +9,9 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { zoom } from 'chartjs-plugin-zoom';
 
-
-const stationUrl = 'https://dev.ghg.center/api/features/collections/public.station_metadata/items';
-const collectionUrl = 'https://dev.ghg.center/api/features/collections';
+const FEATURES_API_URL = process.env.REACT_APP_FEATURES_API_URL || '';
+const stationUrl = `${FEATURES_API_URL}/collections/public.station_metadata/items`;
+const collectionUrl = `${FEATURES_API_URL}/collections`;
 
 export function DashboardContainer() {
   const [selectedStationId, setSelectedStationId] = useState("");
@@ -27,7 +27,7 @@ export function DashboardContainer() {
   const [zoomLocation, setZoomLocation] = useState(
     searchParams.get('zoom-location') || []
   ); // let default zoom location be controlled by map component
-
+  
   useEffect(() => {
     const fetchData = async () => {
       try {

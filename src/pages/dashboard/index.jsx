@@ -38,6 +38,8 @@ import { ShowChart } from '@mui/icons-material';
 const TITLE = 'NOAA: ESRL Global Monitoring Laboratory';
 const DESCRIPTION = '';
 
+const FEATURES_API_URL = process.env.REACT_APP_FEATURES_API_URL || '';
+
 const HorizontalLayout = styled.div`
   width: 90%;
   display: flex;
@@ -45,6 +47,8 @@ const HorizontalLayout = styled.div`
   justify-content: space-between;
   margin: 12px;
 `;
+
+
 export function Dashboard({
   stationData,
   setStationData,
@@ -113,7 +117,7 @@ export function Dashboard({
             if (!item.datetime || !item.value) {
               try {
                 const response = await fetchAllFromFeaturesAPI(
-                  `https://dev.ghg.center/api/features/collections/${item.id}/items`
+                  `${FEATURES_API_URL}/collections/${item.id}/items`
                 );
   
                 if (response.length > 0) {
