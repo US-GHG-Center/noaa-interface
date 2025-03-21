@@ -27,6 +27,9 @@ export function DashboardContainer() {
   const [zoomLocation, setZoomLocation] = useState(
     searchParams.get('zoom-location') || []
   ); // let default zoom location be controlled by map component
+  const [ frequency, setSelectedFrequency ] = useState(searchParams.get('frequency') || "all"); // continuous or non-continuous
+  // const time_period = ['event', 'all', 'monthly', 'weekly'];
+  const time_period = ['monthly', 'event', 'daily'];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -38,7 +41,10 @@ export function DashboardContainer() {
 
         // Fetch and transform collection data
         const collectionApiResponse = await fetchAllFromFeaturesAPI(collectionUrl);
-        dataTransformCollection(collectionApiResponse, transformedStationData, agency);
+        dataTransformCollection(collectionApiResponse, transformedStationData, agency, ghg, time_period);
+
+
+        
         setStations(transformedStationData);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -62,6 +68,10 @@ export function DashboardContainer() {
       zoomLocation={zoomLocation}
       setZoomLocation={setZoomLocation}
       loadingData={loading}
+      frequency={frequency}
+      setSelectedFrequency={setSelectedFrequency}
+      setSelectedGHG={setSelectedGHG}
+      agency={agency}
     />
   );
 }

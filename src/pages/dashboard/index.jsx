@@ -55,6 +55,11 @@ export function Dashboard({
   zoomLocation,
   setZoomLocation,
   loadingData,
+  ghg,
+  frequency,
+  setSelectedGHG,
+  setSelectedFrequency,
+  agency,
 }) {
   // states for data
   const [displayChart, setDisplayChart] = useState(false);
@@ -78,7 +83,6 @@ export function Dashboard({
     setDisplayChart(false);   
   }
   
-  
   useEffect(() => {
     if (!stationData) return;
   
@@ -87,6 +91,7 @@ export function Dashboard({
       vizItems[key] = items;
     });
     setVizItems(vizItems); // Store the object
+    console.log('station Data', stationData);
   }, [stationData]);
 
   useEffect(() => {
@@ -97,6 +102,7 @@ export function Dashboard({
       if (!selectedStation?.collection_items) return;
   
       setLoadingChartData(true);
+      setChartData([]);
       setDisplayChart(true);
   
       // Create a deep copy of stationData to avoid mutation
@@ -157,11 +163,11 @@ export function Dashboard({
     };
   
     fetchCollectionItemValue();
-  }, [selectedStationId]); 
+  }, [selectedStationId]);
 
   useEffect(() => {
     setDisplayChart(chartData.length > 0);
-  }, [chartData]);
+    }, [chartData]);
 
   
   return (
@@ -227,17 +233,17 @@ export function Dashboard({
                     { loadingChartData && <LoadingSpinner />}
                     {chartData.length > 0 && chartData.map((data, index) => (
                       (
-                      <LineChart
-                        key={data.id}
-                        data={data.value}
-                        labels={data.label}
-                        legend={data.legend}
-                        labelX={data.labelX}
-                        labelY={data.labelY}
-                        index={index}
-                        showLine={data.displayLine}
-                        color={data.color}
-                      />)
+                        <LineChart
+                          key={data.id}
+                          data={data.value}
+                          labels={data.label}
+                          legend={data.legend}
+                          labelX={data.labelX}
+                          labelY={data.labelY}
+                          index={index}
+                          showLine={data.displayLine}
+                          color={data.color}
+                        />)
                 ))}
               </MainChart>
             </Panel>

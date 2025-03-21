@@ -49,7 +49,13 @@ export function dataTransformationStation(stationData: any[]): Record<string, St
 }
 
 // Transform collections into CollectionItem objects and attach to respective stations
-export function dataTransformCollection(collectionsData: any[], stations: Record<string, Station>, agency_filter: String): void {
+export function dataTransformCollection(
+  collectionsData: any[],
+  stations: Record<string, Station>,
+  agency_filter: string,
+  ghg_filter: string,
+  time_period: string[]
+): void {
   if (!Array.isArray(collectionsData)) {
     console.error("Invalid API response format: Expected an array");
     return;
@@ -61,7 +67,7 @@ export function dataTransformCollection(collectionsData: any[], stations: Record
       return;
     }
 
-    const parts = collection.id.split('.')[1].split('_');
+    const parts = collection.id.split(".")[1].split("_");
     if (parts.length === 9) {
       const [
         prefix,
@@ -72,26 +78,38 @@ export function dataTransformCollection(collectionsData: any[], stations: Record
         sitecode,
         country,
         gas,
-        time_period
+        time_period_value,
       ] = parts;
 
       const siteCodeUpper = sitecode.toUpperCase();
       const station = stations[siteCodeUpper];
 
-      if (station && agency === agency_filter) {
-        const collectionItem: CollectionItem = {
-          id: collection.id,
-          gas: gas,
-          gas_full_name: gas,
-          product: product,
-          measurement_inst: measurement_inst,
-          methodology: methodology,
-          time_period: time_period,
-          link: collection.links?.[1]
-        };
+      if (
+        station &&
+        agency === agency_filter &&
+        time_period.includes(time_period_value)
+      ) {
+        // Remove existing collection_items that don’t match the new ghg
+        station.collection_items = station.collection_items?.filter(
+          (item) => item.gas === ghg_filter
+        ) || [];
 
-        station.collection_items?.push(collectionItem);
+        // Add only items matching the new ghg and time_period
+        if (gas === ghg_filter) {
+          station.collection_items.push({
+            id: collection.id,
+            gas: gas,
+            gas_full_name: gas,
+            product: product,
+            measurement_inst: measurement_inst,
+            methodology: methodology,
+            time_period: time_period_value,
+            link: collection.links?.[1],
+          });
+        }
       }
     }
   });
 }
+
+
